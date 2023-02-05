@@ -41,8 +41,15 @@ def add_two(mat):
     while mat[a][b] != 0:
         a = random.randint(0, len(mat)-1)
         b = random.randint(0, len(mat)-1)
-    mat[a][b] = 2
+    mat[a][b] = choose_value()
     return mat
+
+def choose_value():
+    return random.choices(
+        list(c.GEN_VALUE_PROBS.keys()), 
+        weights=c.GEN_VALUE_PROBS.values(), 
+        k=1
+          )[0]
 
 ###########
 # Task 1c #

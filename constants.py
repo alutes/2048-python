@@ -62,3 +62,8 @@ KEY_UP_ALT2 = "i"
 KEY_DOWN_ALT2 = "k"
 KEY_LEFT_ALT2 = "j"
 KEY_RIGHT_ALT2 = "l"
+
+GEN_VALUE_PROBS = {
+2:      0.5,
+4:      0.5    
+}

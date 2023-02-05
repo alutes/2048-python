@@ -97,17 +97,21 @@ class GameGrid(Frame):
                 # record last move
                 self.history_matrixs.append(self.matrix)
                 self.update_grid_cells()
-                if logic.game_state(self.matrix) == 'win':
-                    self.grid_cells[1][1].configure(text="You", bg=c.BACKGROUND_COLOR_CELL_EMPTY)
-                    self.grid_cells[1][2].configure(text="Win!", bg=c.BACKGROUND_COLOR_CELL_EMPTY)
                 if logic.game_state(self.matrix) == 'lose':
                     self.grid_cells[1][1].configure(text="You", bg=c.BACKGROUND_COLOR_CELL_EMPTY)
                     self.grid_cells[1][2].configure(text="Lose!", bg=c.BACKGROUND_COLOR_CELL_EMPTY)
+
+    def choose_value(self):
+        return random.choices(
+            list(c.GEN_VALUE_PROBS.keys()), 
+            weights=c.GEN_VALUE_PROBS.values(), 
+            k=1
+            )
 
     def generate_next(self):
         index = (gen(), gen())
         while self.matrix[index[0]][index[1]] != 0:
             index = (gen(), gen())
-        self.matrix[index[0]][index[1]] = 2
+        self.matrix[index[0]][index[1]] = self.choose_value()
 
 game_grid = GameGrid()
