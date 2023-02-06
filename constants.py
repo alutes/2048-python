@@ -5,6 +5,11 @@ GRID_PADDING = 10
 BACKGROUND_COLOR_GAME = "#92877d"
 BACKGROUND_COLOR_CELL_EMPTY = "#9e948a"
 
+# size of the game
+nrow = GRID_LEN
+ncol = GRID_LEN
+NUM_START_BLOCKS = 2
+
 BACKGROUND_COLOR_DICT = {
 2:      "#eee4da",
 4:      "#ede0c8",
@@ -63,7 +68,11 @@ KEY_DOWN_ALT2 = "k"
 KEY_LEFT_ALT2 = "j"
 KEY_RIGHT_ALT2 = "l"
 
+KEY_AI = "space"
+
+
+
 GEN_VALUE_PROBS = {
-2:      0.5,
-4:      0.5    
+    2:      0.9,
+    4:      0.1    
 }

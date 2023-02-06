@@ -8,6 +8,7 @@
 
 import random
 import constants as c
+import numpy as np
 
 #######
 # Task 1a #
@@ -18,12 +19,10 @@ import constants as c
 # Matrix elements must be equal but not identical
 # 1 mark for creating the correct matrix
 
-def new_game(n):
-    matrix = []
-    for i in range(n):
-        matrix.append([0] * n)
-    matrix = add_two(matrix)
-    matrix = add_two(matrix)
+def new_game():
+    matrix = np.zeros([c.nrow, c.ncol]).astype(int)
+    for i in range(c.NUM_START_BLOCKS):
+        matrix = add_block(matrix)
     return matrix
 
 ###########
@@ -35,21 +34,24 @@ def new_game(n):
 # Must ensure that it is created on a zero entry
 # 1 mark for creating the correct loop
 
-def add_two(mat):
+def add_block(mat):
     a = random.randint(0, len(mat)-1)
     b = random.randint(0, len(mat)-1)
     while mat[a][b] != 0:
         a = random.randint(0, len(mat)-1)
         b = random.randint(0, len(mat)-1)
-    mat[a][b] = choose_value()
+    mat[a][b] = choose_new_block_value()
     return mat
 
-def choose_value():
+def choose_one_random(probs):
     return random.choices(
-        list(c.GEN_VALUE_PROBS.keys()), 
-        weights=c.GEN_VALUE_PROBS.values(), 
+        list(probs.keys()),
+        weights=probs.values(),
         k=1
           )[0]
+
+def choose_new_block_value():
+    return choose_one_random(c.GEN_VALUE_PROBS)
 
 ###########
 # Task 1c #
@@ -63,31 +65,26 @@ def choose_value():
 # 2 marks for getting two of the three conditions
 # 3 marks for correct checking
 
-def game_state(mat):
-    # check for win cell
-    for i in range(len(mat)):
-        for j in range(len(mat[0])):
-            if mat[i][j] == 2048:
-                return 'win'
+def game_over(mat):
     # check for any zero entries
     for i in range(len(mat)):
         for j in range(len(mat[0])):
             if mat[i][j] == 0:
-                return 'not over'
+                return False
     # check for same cells that touch each other
     for i in range(len(mat)-1):
         # intentionally reduced to check the row on the right and below
         # more elegant to use exceptions but most likely this will be their solution
         for j in range(len(mat[0])-1):
             if mat[i][j] == mat[i+1][j] or mat[i][j+1] == mat[i][j]:
-                return 'not over'
+                return False
     for k in range(len(mat)-1):  # to check the left/right entries on the last row
         if mat[len(mat)-1][k] == mat[len(mat)-1][k+1]:
-            return 'not over'
+            return False
     for j in range(len(mat)-1):  # check up/down entries on last column
         if mat[j][len(mat)-1] == mat[j+1][len(mat)-1]:
-            return 'not over'
-    return 'lose'
+            return False
+    return True
 
 ###########
 # Task 2a #
@@ -166,7 +163,6 @@ def merge(mat, done):
     return mat, done
 
 def up(game):
-    print("up")
     # return matrix after shifting up
     game = transpose(game)
     game, done = cover_up(game)
@@ -176,7 +172,6 @@ def up(game):
     return game, done
 
 def down(game):
-    print("down")
     # return matrix after shifting down
     game = reverse(transpose(game))
     game, done = cover_up(game)
@@ -186,7 +181,6 @@ def down(game):
     return game, done
 
 def left(game):
-    print("left")
     # return matrix after shifting left
     game, done = cover_up(game)
     game, done = merge(game, done)
@@ -194,7 +188,6 @@ def left(game):
     return game, done
 
 def right(game):
-    print("right")
     # return matrix after shifting right
     game = reverse(game)
     game, done = cover_up(game)
@@ -202,3 +195,107 @@ def right(game):
     game = cover_up(game)[0]
     game = reverse(game)
     return game, done
+
+####################################
+# AI Action choice will go here
+####################################
+all_moves = [up, down, left, right]
+
+def ai(game):
+    
+    # Try each move and build a dict of resulting states
+    move_states = {}
+    for action in all_moves:
+        action_game, action_successful = action(game)
+        
+        # Don't attempt this move if it will end the game
+        if action_successful:
+            move_states[action] = action_game
+    
+    # Pick an action according to the policy
+    key = policy(move_states)
+    
+    # Apply the move to this game
+    return key(game)
+    
+    
+# A probability function of actions for a given game state P(A|S)
+# @TODO: Make this informed by quality functions Q(S,A) -> P(A|S)
+# Currently a shell which picks randomly over valid moves
+def policy(move_states):
+    move_probs = {}
+    
+    for action, action_game in move_states.items():
+        move_probs[action] = value_function(action_game)
+        
+    return choose_one_random(move_probs)
+
+
+# A fitness function for any particular game state
+# @TODO: Make this informed by the different types of value functions below
+def value_function(game):
+    return value_manual_score(game)
+
+
+########################################
+## Option I 
+## Custom Formula for fitness function which incorporates 3 
+##  qualities of a board matrix f
+##
+##      1. Number of free spaces sum_ij(f_ij = 0)
+##
+##      2. Smoothness: the norm of some scaling function of the gradient
+##          |∇f| = |g([∂f/∂x, ∂f/∂y])| 
+##
+##      3. Monotonicity: Look for strictly increasing values 
+##          in x and y directions
+##
+########################################
+
+def free_spaces(game):
+    return np.equal(game, 0).sum()
+
+def smoothness(game):
+    return np.linalg.norm(np.gradient(game))
+
+def monotonicity(game):
+# @TODO: Fill in
+    return 1.0
+
+
+def value_manual_score(game, monotonicity_weight = 1.0, smooth_weight = 1.0, free_weight = 1.0):
+    return monotonicity_weight * monotonicity(game) + \
+            smooth_weight * smoothness(game) + \
+            free_weight * free_spaces(game)
+
+
+########################################
+## Option II
+## Monte Carlo Tree Search (MCTS)
+##
+##  play N random games until you lose or hit depth M. 
+##  Chose the move that loses the least
+##
+########################################
+def value_mcts_score(game):
+    # @TODO: Fill in
+    return 1.0
+
+
+
+
+########################################
+## Option III
+## DQN
+##
+## Learn a representation of the board
+##  S -> V
+##
+## Such that 
+##  V(s) =~ max_a(V(s, a))  via TD Learning
+##  V(s) =~ expected score  via MCTS
+##
+########################################
+def value_dqn_score(game):
+    # @TODO: Fill in
+    return 1.0

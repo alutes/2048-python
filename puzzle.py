@@ -27,12 +27,12 @@ class GameGrid(Frame):
             c.KEY_DOWN_ALT2: logic.down,
             c.KEY_LEFT_ALT2: logic.left,
             c.KEY_RIGHT_ALT2: logic.right,
+            c.KEY_AI: logic.ai
         }
 
         self.grid_cells = []
         self.init_grid()
-        self.matrix = logic.new_game(c.GRID_LEN)
-        self.history_matrixs = []
+        self.matrix = logic.new_game()
         self.update_grid_cells()
 
         self.mainloop()
@@ -84,34 +84,14 @@ class GameGrid(Frame):
 
     def key_down(self, event):
         key = event.keysym
-        print(event)
-        if key == c.KEY_QUIT: exit()
-        if key == c.KEY_BACK and len(self.history_matrixs) > 1:
-            self.matrix = self.history_matrixs.pop()
-            self.update_grid_cells()
-            print('back on step total step:', len(self.history_matrixs))
+        if key == c.KEY_QUIT: 
+            exit()
         elif key in self.commands:
             self.matrix, done = self.commands[key](self.matrix)
             if done:
-                self.matrix = logic.add_two(self.matrix)
-                # record last move
-                self.history_matrixs.append(self.matrix)
+                self.matrix = logic.add_block(self.matrix)
                 self.update_grid_cells()
-                if logic.game_state(self.matrix) == 'lose':
-                    self.grid_cells[1][1].configure(text="You", bg=c.BACKGROUND_COLOR_CELL_EMPTY)
-                    self.grid_cells[1][2].configure(text="Lose!", bg=c.BACKGROUND_COLOR_CELL_EMPTY)
-
-    def choose_value(self):
-        return random.choices(
-            list(c.GEN_VALUE_PROBS.keys()), 
-            weights=c.GEN_VALUE_PROBS.values(), 
-            k=1
-            )
-
-    def generate_next(self):
-        index = (gen(), gen())
-        while self.matrix[index[0]][index[1]] != 0:
-            index = (gen(), gen())
-        self.matrix[index[0]][index[1]] = self.choose_value()
+                if logic.game_over(self.matrix):
+                    print("Game Over")
 
 game_grid = GameGrid()
