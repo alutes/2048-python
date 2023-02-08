@@ -1,39 +1,20 @@
-#
-# CS1010FC --- Programming Methodology
-#
-# Mission N Solutions
-#
-# Note that written answers are commented out to allow us to run your
-# code easily while grading your problem set.
-
 import random
 import constants as c
 import numpy as np
+import copy
 
-#######
-# Task 1a #
-#######
+##########
+# Basic Game board
+##########
 
-# [Marking Scheme]
-# Points to note:
-# Matrix elements must be equal but not identical
-# 1 mark for creating the correct matrix
-
+# New Game Matrix
 def new_game():
     matrix = np.zeros([c.nrow, c.ncol]).astype(int)
     for i in range(c.NUM_START_BLOCKS):
         matrix = add_block(matrix)
     return matrix
 
-###########
-# Task 1b #
-###########
-
-# [Marking Scheme]
-# Points to note:
-# Must ensure that it is created on a zero entry
-# 1 mark for creating the correct loop
-
+# Add a block to a random free space
 def add_block(mat):
     a = random.randint(0, len(mat)-1)
     b = random.randint(0, len(mat)-1)
@@ -43,6 +24,7 @@ def add_block(mat):
     mat[a][b] = choose_new_block_value()
     return mat
 
+# Choose a random value among weighted options
 def choose_one_random(probs):
     return random.choices(
         list(probs.keys()),
@@ -50,27 +32,21 @@ def choose_one_random(probs):
         k=1
           )[0]
 
+# Choose a random value for a new block
 def choose_new_block_value():
     return choose_one_random(c.GEN_VALUE_PROBS)
 
-###########
-# Task 1c #
-###########
 
-# [Marking Scheme]
-# Points to note:
-# Matrix elements must be equal but not identical
-# 0 marks for completely wrong solutions
-# 1 mark for getting only one condition correct
-# 2 marks for getting two of the three conditions
-# 3 marks for correct checking
+def num_free_spaces(mat):
+    return np.equal(mat, 0).sum()
 
+# Check if the game is over
 def game_over(mat):
+
     # check for any zero entries
-    for i in range(len(mat)):
-        for j in range(len(mat[0])):
-            if mat[i][j] == 0:
-                return False
+    if num_free_spaces(mat) > 0:
+        return False
+
     # check for same cells that touch each other
     for i in range(len(mat)-1):
         # intentionally reduced to check the row on the right and below
@@ -78,6 +54,7 @@ def game_over(mat):
         for j in range(len(mat[0])-1):
             if mat[i][j] == mat[i+1][j] or mat[i][j+1] == mat[i][j]:
                 return False
+
     for k in range(len(mat)-1):  # to check the left/right entries on the last row
         if mat[len(mat)-1][k] == mat[len(mat)-1][k+1]:
             return False
@@ -86,66 +63,23 @@ def game_over(mat):
             return False
     return True
 
-###########
-# Task 2a #
-###########
-
-# [Marking Scheme]
-# Points to note:
-# 0 marks for completely incorrect solutions
-# 1 mark for solutions that show general understanding
-# 2 marks for correct solutions that work for all sizes of matrices
-
 def reverse(mat):
-    new = []
-    for i in range(len(mat)):
-        new.append([])
-        for j in range(len(mat[0])):
-            new[i].append(mat[i][len(mat[0])-j-1])
-    return new
-
-###########
-# Task 2b #
-###########
-
-# [Marking Scheme]
-# Points to note:
-# 0 marks for completely incorrect solutions
-# 1 mark for solutions that show general understanding
-# 2 marks for correct solutions that work for all sizes of matrices
+    return np.flip(mat)
 
 def transpose(mat):
-    new = []
-    for i in range(len(mat[0])):
-        new.append([])
-        for j in range(len(mat)):
-            new[i].append(mat[j][i])
-    return new
+    return np.transpose(mat)
+
 
 ##########
-# Task 3 #
+# Valid Game Moves
 ##########
-
-# [Marking Scheme]
-# Points to note:
-# The way to do movement is compress -> merge -> compress again
-# Basically if they can solve one side, and use transpose and reverse correctly they should
-# be able to solve the entire thing just by flipping the matrix around
-# No idea how to grade this one at the moment. I have it pegged to 8 (which gives you like,
-# 2 per up/down/left/right?) But if you get one correct likely to get all correct so...
-# Check the down one. Reverse/transpose if ordered wrongly will give you wrong result.
 
 def cover_up(mat):
-    new = []
-    for j in range(c.GRID_LEN):
-        partial_new = []
-        for i in range(c.GRID_LEN):
-            partial_new.append(0)
-        new.append(partial_new)
+    new = np.zeros(list(mat.shape))
     done = False
-    for i in range(c.GRID_LEN):
+    for i in range(mat.shape[0]):
         count = 0
-        for j in range(c.GRID_LEN):
+        for j in range(mat.shape[1]):
             if mat[i][j] != 0:
                 new[i][count] = mat[i][j]
                 if j != count:
@@ -157,7 +91,7 @@ def merge(mat, done):
     for i in range(c.GRID_LEN):
         for j in range(c.GRID_LEN-1):
             if mat[i][j] == mat[i][j+1] and mat[i][j] != 0:
-                mat[i][j] *= 2
+                mat[i][j] += 1
                 mat[i][j+1] = 0
                 done = True
     return mat, done
@@ -196,10 +130,11 @@ def right(game):
     game = reverse(game)
     return game, done
 
+all_moves = [up, down, left, right]
+
 ####################################
 # AI Action choice will go here
 ####################################
-all_moves = [up, down, left, right]
 
 def ai(game):
     
@@ -218,7 +153,15 @@ def ai(game):
     # Apply the move to this game
     return key(game)
     
-    
+
+####################################
+# Policies will go here
+####################################
+
+def softmax(p, temperature = .05):
+    expp = np.exp(p / temperature)
+    return expp / np.sum(expp)
+
 # A probability function of actions for a given game state P(A|S)
 # @TODO: Make this informed by quality functions Q(S,A) -> P(A|S)
 # Currently a shell which picks randomly over valid moves
@@ -228,13 +171,27 @@ def policy(move_states):
     for action, action_game in move_states.items():
         move_probs[action] = value_function(action_game)
         
+    # Softmax
+    
     return choose_one_random(move_probs)
 
+
+def random_policy(move_states):        
+    return np.choose(1, list(move_states.keys()))
+
+
+def random_move(moves = all_moves):        
+    return np.random.choice(moves, 1).item()
+
+
+####################################
+# Value Functions will go here
+####################################
 
 # A fitness function for any particular game state
 # @TODO: Make this informed by the different types of value functions below
 def value_function(game):
-    return value_manual_score(game)
+    return value_mcts(game)
 
 
 ########################################
@@ -252,22 +209,50 @@ def value_function(game):
 ##
 ########################################
 
+VALUE_MODEL = {
+   'smooth_weight' : 1.0,           # relative weight of smoothness
+   'monotonicity_weight' : 0.0,     # relative weight of monotonicity
+   'free_weight' : 3.0,             # relative weight of free spaces
+   'board_state_weight' : 1.0,       # relative value of the board state compared to not losing
+   'not_loss_weight' : 3.0,         # relative weight of not losing after max play depth
+   'depth_achived_weight' : 1.0     # relative weight of achieving % of max play depth before losing (must be less than not_loss_weight)
+    }
+
+# % of spaces which are free
+#  mean_ij(f_ij = 0)
 def free_spaces(game):
-    return np.equal(game, 0).sum()
+    return num_free_spaces(game) / game.size
 
+# 0-1 measure of smoothness
+# 1 - |∇f| / |f|
+# |∇f| = |g([∂f/∂x, ∂f/∂y])| 
 def smoothness(game):
-    return np.linalg.norm(np.gradient(game))
+    return 1 - np.linalg.norm(np.gradient(game)) / (2 * np.linalg.norm(game))
 
+# 0-1 measure of monotonicity
 def monotonicity(game):
 # @TODO: Fill in
     return 1.0
 
+def weighted_average(value_weight_pairs):
+    total = 0.0
+    total_weight = 0.0
+    for value, weight in value_weight_pairs:
+        total += value * weight
+        total_weight += weight
+    return total / total_weight
 
-def value_manual_score(game, monotonicity_weight = 1.0, smooth_weight = 1.0, free_weight = 1.0):
-    return monotonicity_weight * monotonicity(game) + \
-            smooth_weight * smoothness(game) + \
-            free_weight * free_spaces(game)
-
+def value_manual_score(
+        game, 
+        monotonicity_weight = VALUE_MODEL['monotonicity_weight'], 
+        smooth_weight = VALUE_MODEL['smooth_weight'], 
+        free_weight = VALUE_MODEL['free_weight']
+        ):
+    return weighted_average([
+        (monotonicity(game), monotonicity_weight), 
+        (smoothness(game), smooth_weight), 
+        (free_spaces(game), free_weight)
+        ])
 
 ########################################
 ## Option II
@@ -277,11 +262,82 @@ def value_manual_score(game, monotonicity_weight = 1.0, smooth_weight = 1.0, fre
 ##  Chose the move that loses the least
 ##
 ########################################
-def value_mcts_score(game):
-    # @TODO: Fill in
-    return 1.0
 
+def make_random_move(game):
+    move_successful = False
 
+    while not move_successful:
+        move = random_move()
+        next_game_state, move_successful  = move(game)
+        
+    next_game_state = add_block(next_game_state)
+    return next_game_state
+
+# Return a value from a simulation which reached depth N and resulted in 
+# game state 
+def simulation_value(final_game_state, pct_of_max_depth_reached, ended_in_loss):
+    # If we ended in a loss, return a little bit of value for how far we got
+    if ended_in_loss:
+        return pct_of_max_depth_reached * VALUE_MODEL['depth_achived_weight']
+        
+    # If we reached max depth and are still going, give a base value of credit
+    # for not losing and then evaluate the board state
+    return weighted_average([
+        (1.0, VALUE_MODEL['not_loss_weight']), # value of not having lost
+        (value_manual_score(final_game_state), VALUE_MODEL['board_state_weight'])
+         ])
+
+# Run a single simulation at the appropriate depth
+def mcts_simulate(trial_state, max_simulation_depth = 3):
+    ended_in_loss = False
+    
+    # We are simulating from right after a move but before a block is added,
+    # so must add a block first
+    trial_state = add_block(trial_state)
+    
+    for move_depth in range(max_simulation_depth):
+        if game_over(trial_state):
+            ended_in_loss = True
+            break
+        trial_state = make_random_move(trial_state)
+        
+    return simulation_value(trial_state, move_depth / max_simulation_depth, ended_in_loss)
+
+# Run N simulations and return the results
+def mcts_run_simulations(game, n_trials = 100, **kwargs):
+    trial_results = []
+    for trial in range(n_trials):
+        trial_state = copy.deepcopy(game)
+        trial_results.append(mcts_simulate(trial_state, **kwargs))
+    return trial_results
+
+def value_mcts(
+        game, 
+        expansion_depth = 1, 
+        **kwargs
+        ):
+    """
+    https://en.wikipedia.org/wiki/Monte_Carlo_tree_search#/media/File:MCTS-steps.svg
+
+    Parameters
+    ----------
+    game : np.array
+        the matrix representing the game state.
+    expansion_depth : int
+        how deep to expand the game tree before simulation/backprop
+    max_simulation_depth : TYPE, optional
+        DESCRIPTION. The default is 100.
+    n_trials : TYPE, optional
+        DESCRIPTION. The default is 100.
+
+    Returns
+    -------
+    float
+        DESCRIPTION.
+
+    """
+    simulation_results = mcts_run_simulations(game, **kwargs)
+    return np.mean(simulation_results)
 
 
 ########################################

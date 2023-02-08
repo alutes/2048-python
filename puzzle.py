@@ -2,6 +2,7 @@ from tkinter import Frame, Label, CENTER
 import random
 import logic
 import constants as c
+import time
 
 def gen():
     return random.randint(0, c.GRID_LEN - 1)
@@ -68,6 +69,11 @@ class GameGrid(Frame):
                 grid_row.append(t)
             self.grid_cells.append(grid_row)
 
+    # We are storing the matrix as 0,1,2,3,...
+    # but need to convert to 0,2,4,...
+    def text_to_string(self, x):
+        return c.CELL_DISPLAY_DICT[x]
+
     def update_grid_cells(self):
         for i in range(c.GRID_LEN):
             for j in range(c.GRID_LEN):
@@ -76,22 +82,31 @@ class GameGrid(Frame):
                     self.grid_cells[i][j].configure(text="",bg=c.BACKGROUND_COLOR_CELL_EMPTY)
                 else:
                     self.grid_cells[i][j].configure(
-                        text=str(new_number),
+                        text=self.text_to_string(new_number),
                         bg=c.BACKGROUND_COLOR_DICT[new_number],
                         fg=c.CELL_COLOR_DICT[new_number]
                     )
         self.update_idletasks()
 
+    def perform_command(self, command):
+        self.matrix, done = command(self.matrix)
+        if done:
+            self.matrix = logic.add_block(self.matrix)
+            self.update_grid_cells()
+            if logic.game_over(self.matrix):
+                print("Game Over")
+
     def key_down(self, event):
         key = event.keysym
-        if key == c.KEY_QUIT: 
+        if key == c.KEY_QUIT:
             exit()
+        # In AI mode just do AI moves as fast as possible
+        elif key == "p":
+            for i in range(10):
+                self.perform_command(logic.ai)
+                print(i)
         elif key in self.commands:
-            self.matrix, done = self.commands[key](self.matrix)
-            if done:
-                self.matrix = logic.add_block(self.matrix)
-                self.update_grid_cells()
-                if logic.game_over(self.matrix):
-                    print("Game Over")
+            command = self.commands[key]
+            self.perform_command(command)
 
 game_grid = GameGrid()
