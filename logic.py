@@ -212,7 +212,7 @@ def value_function(game):
 VALUE_MODEL = {
    'smooth_weight' : 1.0,           # relative weight of smoothness
    'monotonicity_weight' : 0.0,     # relative weight of monotonicity
-   'free_weight' : 3.0,             # relative weight of free spaces
+   'free_weight' : 1.0,             # relative weight of free spaces
    'board_state_weight' : 1.0,       # relative value of the board state compared to not losing
    'not_loss_weight' : 3.0,         # relative weight of not losing after max play depth
    'depth_achived_weight' : 1.0     # relative weight of achieving % of max play depth before losing (must be less than not_loss_weight)
@@ -303,6 +303,20 @@ def mcts_simulate(trial_state, max_simulation_depth = 3):
         
     return simulation_value(trial_state, move_depth / max_simulation_depth, ended_in_loss)
 
+
+# Run a single simulation until loss
+def mcts_inf_depth(trial_state):
+    # We are simulating from right after a move but before a block is added,
+    # so must add a block first
+    trial_state = add_block(trial_state)
+    depth = 0
+    while not game_over(trial_state):
+        trial_state = make_random_move(trial_state)
+        depth += 1
+    return depth
+
+
+
 # Run N simulations and return the results
 def mcts_run_simulations(game, n_trials = 100, **kwargs):
     trial_results = []
@@ -310,6 +324,7 @@ def mcts_run_simulations(game, n_trials = 100, **kwargs):
         trial_state = copy.deepcopy(game)
         trial_results.append(mcts_simulate(trial_state, **kwargs))
     return trial_results
+
 
 def value_mcts(
         game, 
