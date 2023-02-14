@@ -72,7 +72,7 @@ class GameGrid(Frame):
     # We are storing the matrix as 0,1,2,3,...
     # but need to convert to 0,2,4,...
     def text_to_string(self, x):
-        return c.CELL_DISPLAY_DICT[x]
+        return str(int(x))
 
     def update_grid_cells(self):
         for i in range(c.GRID_LEN):
