@@ -9,8 +9,8 @@ import random
 import constants as c
 import numpy as np
 import copy
-from logic import all_moves, add_block, game_over
-from value_functions import VALUE_MODEL, value_manual_score
+from logic import all_moves, add_block, game_over, choose_one_random
+from value_functions import VALUE_MODEL, value_slow, weighted_average
 
 # Exploration Constants
 GAMMA = 0.95
@@ -98,11 +98,11 @@ def expand_states(game, depth = 1, max_states_retained = 8):
 # Score a game board using
 # S(s) = r(s) + V(s)
 # and V is a manually determined board quality function
-def score_board(game):
+def score_board(game, value_fn):
     if game_over(game):
         return LOSS_REWARD
     #return value_simple(game)
-    return value_manual_score(game)
+    return value_fn(game)
 
 # Relative probability of seeing a given generation step
 # (based on generation probabilities)
@@ -115,10 +115,10 @@ def get_board_probability(gen_key):
 # Backpropogate board scores to the previous move
 # - For ACTIONS: take the max (i.e. we would take the best action)
 # - For GENERATION: take an expected value since generation is random
-def score_move_space(move_space, discount = 1):
+def score_move_space(move_space, discount = 1, value_fn = value_slow):
     # If this is a board then return the board value
     if isinstance(move_space, np.ndarray):
-        return discount * score_board(move_space)
+        return discount * score_board(move_space, value_fn = value_fn)
     
     # Otherwise we should have a more expanded move space
     elif isinstance(move_space, dict):
@@ -136,8 +136,8 @@ def score_move_space(move_space, discount = 1):
             expected_value = 0.0
             total_probability = 0.0
             for gen_key, move_state in move_space.items():
-                probability = get_board_probability(gen_key, move_space)
-                value = score_move_space(move_state, discount = discount * GAMMA) # depreciate
+                probability = get_board_probability(gen_key)
+                value = score_move_space(move_state, discount = discount * GAMMA, value_fn = value_fn) # depreciate
                 expected_value += probability * value
                 total_probability += probability
             return expected_value / total_probability
@@ -145,7 +145,7 @@ def score_move_space(move_space, discount = 1):
         # If the dictionary keys are moves then these are block actions
         # Take the max (off-policy valuation)
         elif isinstance(sample_key, str):
-            return np.max(np.array([score_move_space(move_state, discount = discount * GAMMA) for move_state in move_space.values()]))
+            return np.max(np.array([score_move_space(move_state, discount = discount * GAMMA, value_fn = value_fn) for move_state in move_space.values()]))
     
         else:
             raise ValueError(f"{sample_key} is a {type(sample_key)} not valid for move states")
@@ -185,11 +185,6 @@ def board_probabilities(board_states):
     return board_probabilities
 
 
-
-
-action_states = build_move_dict(game)
-
-
 ########################################
 ## Monte Carlo Tree Search (MCTS)
 ##
@@ -219,7 +214,7 @@ def simulation_value(final_game_state, pct_of_max_depth_reached, ended_in_loss):
     # for not losing and then evaluate the board state
     return weighted_average([
         (1.0, VALUE_MODEL['not_loss_weight']), # value of not having lost
-        (value_manual_score(final_game_state), VALUE_MODEL['board_state_weight'])
+        (value_slow(final_game_state), VALUE_MODEL['board_state_weight'])
          ])
 
 # Run a single simulation at the appropriate depth
@@ -234,7 +229,7 @@ def mcts_simulate(trial_state, max_simulation_depth = 3):
         if game_over(trial_state):
             ended_in_loss = True
             break
-        trial_state = make_random_move(trial_state)
+        trial_state = make_simple_move(trial_state)
         
     return simulation_value(trial_state, move_depth / max_simulation_depth, ended_in_loss)
 
@@ -246,7 +241,7 @@ def mcts_inf_depth(trial_state):
     trial_state = add_block(trial_state)
     depth = 0
     while not game_over(trial_state):
-        trial_state = make_random_move(trial_state)
+        trial_state = make_simple_move(trial_state)
         depth += 1
     return depth
 
@@ -338,7 +333,7 @@ def ai(game):
 # A probability function of actions for a given game state P(A|S)
 # @TODO: Make this informed by quality functions Q(S,A) -> P(A|S)
 # Currently a shell which picks randomly over valid moves
-def policy(move_states, value_fn = value_manual_score):
+def policy(move_states, value_fn = value_slow):
     move_probs = {}
     
     for action, action_game in move_states.items():

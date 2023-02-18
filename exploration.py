@@ -49,10 +49,11 @@ smooth_weight = VALUE_MODEL['smooth_weight']
 free_weight = VALUE_MODEL['free_weight']
 plot = True
 
+import tqdm
+
 game = new_game()
-for move_index in range(1000):
-    plot = move_index%10==0
-    print(move_index)
+for move_index in tqdm.tqdm(range(1000)):
+    plot = move_index%50==0
 
     if plot:
         fig, axs = plt.subplots(2, 2)
@@ -111,7 +112,6 @@ for move_index in range(1000):
     if plot:
         plt.suptitle(move, fontsize = 20)
         plt.show()
-
 
 
 

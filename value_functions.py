@@ -60,7 +60,31 @@ def free_spaces(game):
 # 1 - |∇f| / |f|
 # |∇f| = |g([∂f/∂x, ∂f/∂y])| 
 def smoothness(game):
-    return 1 - np.sum(np.gradient(game)) / (2 * np.sum(game))
+    gx = np.diff(game, axis = 0)
+    gy = np.diff(game, axis = 1)
+    cost = np.abs(gx).sum() + np.abs(gy).sum()
+    return 1 - cost / (2 * np.sum(game))
+
+
+# 0-1 measure of smoothness
+# which includes second order diffs
+def smoothness_2d(game, decay = 0.25):
+    gx = np.diff(game, axis = 0)
+    gy = np.diff(game, axis = 1)
+    
+    gxy = np.diff(gx, axis = 1)
+    gxx = np.diff(game, n = 2, axis = 0)
+    gyy = np.diff(game, n = 2, axis = 1)
+
+    cost = (
+        np.abs(gx).sum() + 
+        np.abs(gy).sum()
+        ) + decay * (
+            np.abs(gxy).sum() +
+            np.abs(gxx).sum() +
+            np.abs(gyy).sum()
+        )
+    return 1 - cost / (4 * np.sum(game))
 
 
 # Gives cost to deviation from monoticity
@@ -109,20 +133,40 @@ def weighted_average(value_weight_pairs):
         total_weight += weight
     return total / total_weight
 
-def value_manual_score(
-        game, 
-        corner_weight = VALUE_MODEL['corner_weight'], 
-        monotonicity_weight = VALUE_MODEL['monotonicity_weight'], 
-        smooth_weight = VALUE_MODEL['smooth_weight'], 
+###
+# Different weighted combinations
+###
+
+def value_slow(
+        game,
+        corner_weight = VALUE_MODEL['corner_weight'],
+        monotonicity_weight = VALUE_MODEL['monotonicity_weight'],
+        smooth_weight = VALUE_MODEL['smooth_weight'],
         free_weight = VALUE_MODEL['free_weight']
         ):
     mat = game
     return weighted_average([
-        #(monotonicity(mat), monotonicity_weight), # too slow atm, exclude
-        (corner_value(mat), corner_weight), 
-        (smoothness(mat), smooth_weight), 
+        (monotonicity(mat), monotonicity_weight), # too slow atm, exclude
+        (corner_value(mat), corner_weight),
+        (smoothness_2d(mat), smooth_weight),
         (free_spaces(mat), free_weight)
         ])
+
+def value_medium(
+        game,
+        corner_weight = VALUE_MODEL['corner_weight'],
+        smooth_weight = VALUE_MODEL['smooth_weight'],
+        free_weight = VALUE_MODEL['free_weight']
+        ):
+    mat = game
+    return weighted_average([
+        (corner_value(mat), corner_weight),
+        (smoothness_2d(mat), smooth_weight),
+        (free_spaces(mat), free_weight)
+        ])
+
+def value_fast(game):
+    return free_spaces(game)
 
 
 ###
@@ -132,5 +176,5 @@ def value_manual_score(
 # A fitness function for any particular game state
 # @TODO: Make this informed by the different types of value functions below
 def value_function(game):
-    return value_manual_score(game)
+    return value_slow(game)
 
