@@ -116,56 +116,72 @@ for move_index in tqdm.tqdm(range(1000)):
 
 
 ####################
-# Search tree depth
+# Time different search depths
 ####################
 
+
+import numpy as np
+import tqdm
 import pandas as pd
-from matplotlib import pyplot as plt
+
+from value_functions import value_medium, value_fast, value_slow
+from logic import new_game, game_over, all_moves_dict, add_block
+from search_tree import choose_max, expand_states, score_move_space
+
 import time
-from value_functions import *
+# Configurations
+config_choices = [
+    (0, 28, value_fast),
+    (0, 28, value_medium),
+    (0, 28, value_slow),
+
+    (1, 15, value_fast),
+    (1, 15, value_medium),
+    (1, 10, value_slow),
+
+    (2, 6, value_fast),
+    (2, 3, value_medium),
+
+    (3, 2, value_fast)
+]
+
+
+for config in config_choices:
+
+    # Choose a reasonable depth and breadth
+    depth, breadth, value_fn = config
+    print(depth, breadth, value_fn.__qualname__)
+    start = time.time()
+
+    # Instantiate game
+    game = new_game()
+
+    for move_index in range(2):
+
+        # Loop through each action
+        move_space = expand_states(
+            game,
+            depth = depth,
+            max_states_retained = breadth
+            )
+
+        # Evaluate Actions
+        action_values = {}
+        for i, action_name in enumerate(move_space):
+
+            # unpack action
+            move = all_moves_dict[action_name]
+            action_game, done = move(game)
+            lookahead_value = score_move_space(move_space[action_name], value_fn = value_fn)
+            action_values[action_name] = lookahead_value
+    end = time.time()
+    print(end - start)
+    
 
 
 
-def value_simple(
-        game, 
-        corner_weight = VALUE_MODEL['corner_weight'], 
-        monotonicity_weight = VALUE_MODEL['monotonicity_weight'], 
-        smooth_weight = VALUE_MODEL['smooth_weight'], 
-        free_weight = VALUE_MODEL['free_weight']
-        ):
-    mat = game
-    return weighted_average([
-        #(monotonicity(mat), monotonicity_weight), 
-        (corner_value(mat), corner_weight), 
-        (smoothness(mat), smooth_weight), 
-        (free_spaces(mat), free_weight)
-        ])
-
-
-
-
-move_space = expand_states(game, depth = 0, max_states_retained = 6)
-
-
-
-
-total_length(move_space)
-
-
-action_val_list = []
-for i in range(1, 5):
-    move_space = expand_states(game, depth = 2, max_states_retained = i)
-    action_values = {}
-    for action in move_space:
-        action_values[action] = score_move_space(move_space[action])
-    print(i)
-    action_val_list.append(action_values)
     
     
-df = pd.DataFrame(action_val_list)
-plt.plot(df.up)
-plt.plot(df.down)
-plt.plot(df.left)
-plt.plot(df.right)
-plt.legend(['up', 'down', 'left', 'right'])
+    
+
 

@@ -146,7 +146,7 @@ def value_slow(
         ):
     mat = game
     return weighted_average([
-        (monotonicity(mat), monotonicity_weight), # too slow atm, exclude
+        (monotonicity(mat), monotonicity_weight), # too slow, exclude first
         (corner_value(mat), corner_weight),
         (smoothness_2d(mat), smooth_weight),
         (free_spaces(mat), free_weight)
