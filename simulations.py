@@ -69,7 +69,7 @@ log_every = 10
 
 # Play N games
 num_epsiodes = 1000
-for episode_index in range(num_epsiodes):
+for episode_index in range(67, num_epsiodes):
     print(f"#####\n Episode: {episode_index} \n#####")
 
     # Choose a reasonable depth and breadth
@@ -138,4 +138,5 @@ for episode_index in range(num_epsiodes):
             df = pd.DataFrame(state_data)
             df.to_csv(f"/Users/alutes/Documents/Data/state_data_{episode_index}.csv")
             print(game.sum())
+            state_data = []
             break

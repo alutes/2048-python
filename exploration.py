@@ -40,6 +40,62 @@ print(i)
 print(i / total_time)
 
 
+
+####################
+# Print Out Board States
+####################
+
+# Instantiate game using our board sampler
+game = sample_board()
+
+for move_index in tqdm.tqdm(range(2000)):
+
+    # Loop through each action
+    move_space = expand_and_prune(
+        game,
+        depth = depth,
+        value_fn = value_medium,
+        max_initial_states = max_retained_states,
+        max_retained_actions = max_retained_actions,
+        max_retained_states = max_retained_states
+    )
+
+    # Evaluate Actions
+    action_values = {}
+    for i, action_name in enumerate(move_space):        
+
+        # Calculate Expected Board Value
+        action_values[action_name] = score_move_space(move_space[action_name], value_fn, discount = 1)
+
+    # Find the Nth highest action value
+    actions_sorted_by_value = sorted(
+        list(action_values.keys()), 
+        key = action_values.get, 
+        reverse = True
+        )
+
+    # unpack action
+    best_action_name = actions_sorted_by_value[0]
+    move = all_moves_dict[best_action_name]
+    action_game, done = move(game)
+    lookahead_value = action_values[best_action_name]
+
+    # Choose Action
+    move = choose_max(action_values)
+    game, done = all_moves_dict[move](game)
+    if not done:
+        raise ValueError("Illegal move chosen")
+    game = add_block(game)
+    
+
+    # plot area
+    if move_index%5==0:
+        plt.imshow(np.log1p(game))
+        for i in range(4):
+            for j in range(4):
+                text = plt.text(j, i, int(game[i, j]), ha="center", va="center", color="w")
+        plt.show()
+        
 ####################
 # Print Out Cost Functions and boards
 ####################
@@ -53,7 +109,7 @@ import tqdm
 
 game = new_game()
 for move_index in tqdm.tqdm(range(1000)):
-    plot = move_index%50==0
+    plot = move_index%5==0
 
     if plot:
         fig, axs = plt.subplots(2, 2)
