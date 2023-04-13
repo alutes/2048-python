@@ -17,7 +17,7 @@ import constants as c
 from scipy.stats import poisson as ps
 
 # Sample over random boards that look like we might get a few thousand moves in
-def sample_board(base_rate = 12, value_length = c.nrow * c.ncol):
+def sample_board(base_rate = 11, value_length = c.nrow * c.ncol):
     
     # Get a steadily decreasing 1 -> 0 set of values
     cum_quantiles = np.cumprod(np.random.rand(value_length))    
@@ -47,12 +47,7 @@ def sample_board(base_rate = 12, value_length = c.nrow * c.ncol):
 
 
 # Configurations
-config_choices = [
-    (2, 2, value_medium),
-    (2, 2, value_slow),
-    (2, 4, value_medium),
-    (2, 4, value_slow),
-    
+config_choices = [    
     (3, 2, value_medium),
     (3, 2, value_slow)
 ]
@@ -62,6 +57,7 @@ config_choices = [
 # Static Parameters
 max_initial_states = 16
 max_retained_actions = 2
+max_moves_per_episode = 10000
 
 # Logging
 state_data = []
@@ -69,7 +65,7 @@ log_every = 10
 
 # Play N games
 num_epsiodes = 1000
-for episode_index in range(67, num_epsiodes):
+for episode_index in range(0, num_epsiodes):
     print(f"#####\n Episode: {episode_index} \n#####")
 
     # Choose a reasonable depth and breadth
@@ -79,14 +75,14 @@ for episode_index in range(67, num_epsiodes):
     # Instantiate game using our board sampler
     game = sample_board()
 
-    for move_index in tqdm.tqdm(range(2000)):
+    for move_index in tqdm.tqdm(range(max_moves_per_episode)):
 
         # Loop through each action
         move_space = expand_and_prune(
             game,
             depth = depth,
             value_fn = value_medium,
-            max_initial_states = max_retained_states,
+            max_initial_states = max_initial_states,
             max_retained_actions = max_retained_actions,
             max_retained_states = max_retained_states
         )
@@ -136,7 +132,7 @@ for episode_index in range(67, num_epsiodes):
         # End the game if it's over
         if is_game_over:
             df = pd.DataFrame(state_data)
-            df.to_csv(f"/Users/alutes/Documents/Data/state_data_{episode_index}.csv")
+            df.to_csv(f"/Users/alutes/Documents/Data/state_data_{episode_index}.csv", index = False)
             print(game.sum())
             state_data = []
             break

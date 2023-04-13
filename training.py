@@ -13,10 +13,24 @@ import pandas as pd
 import torch
 import torch.nn as nn
 import torch.optim as optim
+import torch.nn.functional as F
 import numpy as np
 import random
 
 from modeling import DubNet
+
+from matplotlib import pyplot as plt
+
+class SoftCrossEntropyLoss(nn.Module):
+   def __init__(self, weights = torch.tensor(1.0)):
+      super(SoftCrossEntropyLoss, self).__init__()
+      self.weights = weights
+
+   def forward(self, y_hat, y):
+      p = F.log_softmax(y_hat, 1)
+      w_labels = self.weights*y
+      loss = -(w_labels*p).sum() / (w_labels).sum()
+      return loss
 
 # Converts a 4X4 numpy matrix into a torch matrix used for modeling
 def np_to_torch(game):
@@ -31,78 +45,195 @@ def string_to_mat(string):
 
 # Convert a lookahead value to a tensor
 def output_val_to_tensor(labels):
-    return torch.from_numpy(np.array([labels, 1-labels]))
+    return torch.from_numpy(np.array([labels, 1-labels])).reshape(1,2)
+
+
+def get_accuracy(outputs, batch_labels, hinge=.5):
+    out = outputs[:,0].detach().numpy() 
+    lab = batch_labels[:,0].detach().numpy()
+    accuracy = ((out < hinge) == (lab < hinge)).mean()
+    return accuracy
+    
+
+def plot_accuracy_soft(out, lab):
+    # Scatterplot    
+    plt.subplot(1, 2, 2)
+    plt.scatter(out, lab, alpha = .1)
+    plt.show()
+
+def plot_accuracy(out, lab):
+    # Scatterplot    
+    plt.scatter(out, lab, alpha = .1)
+    plt.show()
+
+def print_progress(epoch, loss, i, batch_input, batch_labels, outputs, accuracy, show_plots=False):
+    # Transform results
+    out = outputs[:,0].detach().numpy() 
+    lab = batch_labels[:,0].detach().numpy()
+    print('[%d, %5d] loss: %.3f accuracy: %.3f' % (epoch + 1, i + 1, loss, accuracy))
+    
+    if show_plots:
+        # Plot Example Matrix
+        index = np.random.randint(0, len(batch_input) - 1)
+        example_input = batch_input[index]
+        example_output = outputs[index]
+        example_label= batch_labels[index] 
+        
+        plt.subplot(1, 2, 1)
+        plot_matrix(example_input, example_label, example_output)
+        
+        # Plot Accuracy
+        plt.subplot(1, 2, 2)
+        plot_accuracy(out, lab)
+    
+def plot_matrix(example_input, example_label, example_output):
+    game = example_input.numpy().reshape(4,4)
+    plt.imshow(np.log1p(game))
+    for i in range(4):
+        for j in range(4):
+            text = plt.text(j, i, int(game[i, j]), ha="center", va="center", color="w")
+    
+    output_print = round(example_output[0].item(), 2)
+    label_print = round(example_label[0].item(), 2)
+    plt.title(f"""label: {label_print}
+              prediction: {output_print}""")
+
 
 # Train a model for a set number of epochs
-def train(model, train_loader, criterion, optimizer, num_epochs, shuffle=True, print_every=500):
-    epoch_losses = []
+def train(model, train_loader, criterion, optimizer, num_epochs, shuffle=True, batch_size=500):
+    loss_list = []
     for epoch in range(num_epochs):
-        running_loss = 0.0
 
         if shuffle:
             random.shuffle(train_loader)
 
+        input_list = []
+        label_list = []
         for i, data in enumerate(train_loader):
             # Get the inputs and labels
             inputs, labels = data
             
-            # Convert labels
-            label_tensor = output_val_to_tensor(labels)
-
-            # Zero the parameter gradients
-            optimizer.zero_grad()
-
-            # Forward pass, backward pass, and optimize
-            outputs = model(inputs)
-            loss = criterion(outputs.reshape([1,2]), label_tensor.reshape([1,2]))
-            loss.backward()
+            input_list.append(inputs)
+            label_list.append(output_val_to_tensor(labels))
             
-            if i % batch_size == 0:
-                optimizer.step()
+            if i % batch_size == (batch_size - 1) or i == (len(train_loader) - 1):
+                current_batch_size = len(input_list)
+                batch_input = torch.cat(input_list)
+                batch_labels = torch.cat(label_list)
+                
+                # Zero the parameter gradients
+                optimizer.zero_grad()
 
-            # Print statistics
-            running_loss += loss.item()
-            if i % print_every == (print_every-1):    # Print every N mini-batches
-                print('[%d, %5d] loss: %.3f' % (epoch + 1, i + 1, running_loss / print_every))
-                epoch_losses.append((epoch, i, running_loss))
-                running_loss = 0.0
-    return epoch_losses
+                # Forward pass, backward pass, and optimize
+                outputs = model(batch_input)
+                loss = criterion(outputs, batch_labels)
+                
+                # Backprop
+                loss.backward()
+                optimizer.step()
+                
+                # Get Accuracy
+                accuracy = get_accuracy(outputs, batch_labels, hinge=.5)
+                
+                # Losses
+                loss_list.append({
+                    'epoch' : epoch, 
+                    'i' : i, 
+                    'loss' : loss.item(),
+                    'accuracy' : accuracy
+                    })
+                
+                # Print Progress  
+                if np.random.rand()<.01:
+                    print_progress(epoch, loss.item(), i, batch_input, outputs, batch_labels, show_plots=True)
+
+                # reset the batch
+                input_list = []
+                label_list = []
+    return loss_list
+
 
 # Load Data
 base_path = Path("/Users/alutes/Documents/Data/")
 files = [f for f in base_path.glob('**/*.csv') if f.is_file()]
 df = pd.concat([pd.read_csv(f) for f in files])
-del df['Unnamed: 0']
 
 # Load game matrices into tensors
 df['mat'] = df.game.apply(string_to_mat)
 
 # Transform quality values
+episode_max = df.groupby('episode')['move'].max()
+df['episode_max'] = df['episode'].map(episode_max)
+df['moves_remaining'] = df['episode_max'] - df['move']
+df['target'] = df['moves_remaining'] < 100
+
 vals = df['lookahead_value'].values
 vals = 2*np.minimum(.5, np.maximum(vals,0.0))
+df['val'] = vals
+
+# Class imbalance ratio
+relative_weight = 1 / np.mean(df.target)
+relative_weight = 10.0
 
 # Data loader
-loader = list(zip(
+train_loader = list(zip(
     df['mat'].values,
-    vals
+    df['target'].values * 1.0
     ))
 
 # Define a model, and training objects
-model = DubNet()
-criterion = nn.CrossEntropyLoss()
+model = DubNet(
+    n_filters = [20, 20],
+    n_hidden_units = 100
+    )
+criterion = nn.CrossEntropyLoss(weight = torch.tensor([1.0, relative_weight]))
 optimizer = optim.Adam(model.parameters(), lr=0.001)
 
 # Train the model
-losses = train(
+loss_list = train(
       model=model,
-      train_loader=loader,
+      train_loader=train_loader,
       criterion=criterion,
       optimizer=optimizer,
-      num_epochs=30,
-      print_every=5000
+      num_epochs=300,
+      batch_size=200
       )
 
 
 # Analyze Losses
-loss_df = pd.DataFrame(losses, columns=['epoch', 'iteration', 'loss'])
-plt.plot(loss_df['epoch'] + (loss_df['iteration'] / 50000), loss_df['loss'])
+loss_df = pd.DataFrame(loss_list)
+plt.plot(loss_df['epoch'] + (loss_df['i'] / loss_df['i'].max()), loss_df['loss'])
+plt.plot(loss_df['epoch'] + (loss_df['i'] / loss_df['i'].max()), loss_df['accuracy'])
+
+
+inputs, labels = data
+
+# Convert labels
+label_tensor = output_val_to_tensor(labels)
+
+# Forward pass, backward pass, and optimize
+outputs = model(inputs)
+loss = criterion(outputs.reshape([1,2]), label_tensor.reshape([1,2]))
+
+if i % batch_size == 0:
+    loss.backward()
+    optimizer.step()
+
+
+
+for i, data in enumerate(train_loader):
+    # Get the inputs and labels
+    inputs, labels = data
+    
+    if labels < .01:
+        plot_matrix(inputs, labels)
+        time.sleep(2)
+
+game = inputs.numpy().reshape(4,4)
+
+
+np.mean(df.lookahead_value < 0)
+tmp = df.loc[df.lookahead_value < 0].iloc[1]
+inputs = tmp['mat']
+labels = tmp['lookahead_value']
+plot_matrix(inputs, labels)
