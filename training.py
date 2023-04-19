@@ -57,14 +57,13 @@ def get_accuracy(outputs, batch_labels, hinge=.5):
 
 def plot_accuracy_soft(out, lab):
     # Scatterplot    
-    plt.subplot(1, 2, 2)
     plt.scatter(out, lab, alpha = .1)
-    plt.show()
 
 def plot_accuracy(out, lab):
-    # Scatterplot    
-    plt.scatter(out, lab, alpha = .1)
-    plt.show()
+    # hists    
+    bins = np.arange(0,1,.01)
+    plt.hist(out[lab == 0.0], density = True, histtype = 'step', cumulative = True, bins=bins)
+    plt.hist(out[lab == 1.0], density = True, histtype = 'step', cumulative = True, bins=bins)
 
 def print_progress(epoch, loss, i, batch_input, batch_labels, outputs, accuracy, show_plots=False):
     # Transform results
@@ -85,6 +84,7 @@ def print_progress(epoch, loss, i, batch_input, batch_labels, outputs, accuracy,
         # Plot Accuracy
         plt.subplot(1, 2, 2)
         plot_accuracy(out, lab)
+        plt.show()
     
 def plot_matrix(example_input, example_label, example_output):
     game = example_input.numpy().reshape(4,4)
@@ -145,7 +145,7 @@ def train(model, train_loader, criterion, optimizer, num_epochs, shuffle=True, b
                 
                 # Print Progress  
                 if np.random.rand()<.01:
-                    print_progress(epoch, loss.item(), i, batch_input, outputs, batch_labels, show_plots=True)
+                    print_progress(epoch, loss.item(), i, batch_input, batch_labels, outputs, accuracy, show_plots=True)
 
                 # reset the batch
                 input_list = []
@@ -173,7 +173,7 @@ df['val'] = vals
 
 # Class imbalance ratio
 relative_weight = 1 / np.mean(df.target)
-relative_weight = 10.0
+relative_weight = 1 / 10.0
 
 # Data loader
 train_loader = list(zip(
@@ -187,7 +187,7 @@ model = DubNet(
     n_hidden_units = 100
     )
 criterion = nn.CrossEntropyLoss(weight = torch.tensor([1.0, relative_weight]))
-optimizer = optim.Adam(model.parameters(), lr=0.001)
+optimizer = optim.Adam(model.parameters(), lr=0.0001)
 
 # Train the model
 loss_list = train(
@@ -195,8 +195,8 @@ loss_list = train(
       train_loader=train_loader,
       criterion=criterion,
       optimizer=optimizer,
-      num_epochs=300,
-      batch_size=200
+      num_epochs=600,
+      batch_size=800
       )
 
 
@@ -204,36 +204,3 @@ loss_list = train(
 loss_df = pd.DataFrame(loss_list)
 plt.plot(loss_df['epoch'] + (loss_df['i'] / loss_df['i'].max()), loss_df['loss'])
 plt.plot(loss_df['epoch'] + (loss_df['i'] / loss_df['i'].max()), loss_df['accuracy'])
-
-
-inputs, labels = data
-
-# Convert labels
-label_tensor = output_val_to_tensor(labels)
-
-# Forward pass, backward pass, and optimize
-outputs = model(inputs)
-loss = criterion(outputs.reshape([1,2]), label_tensor.reshape([1,2]))
-
-if i % batch_size == 0:
-    loss.backward()
-    optimizer.step()
-
-
-
-for i, data in enumerate(train_loader):
-    # Get the inputs and labels
-    inputs, labels = data
-    
-    if labels < .01:
-        plot_matrix(inputs, labels)
-        time.sleep(2)
-
-game = inputs.numpy().reshape(4,4)
-
-
-np.mean(df.lookahead_value < 0)
-tmp = df.loc[df.lookahead_value < 0].iloc[1]
-inputs = tmp['mat']
-labels = tmp['lookahead_value']
-plot_matrix(inputs, labels)
